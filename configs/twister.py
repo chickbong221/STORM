@@ -1,6 +1,7 @@
 import nnet
 import os
 import json
+import time
 
 # Extract params from filename
 env_name = os.environ["env_name"]
