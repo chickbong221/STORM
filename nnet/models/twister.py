@@ -846,7 +846,7 @@ class TWISTER(models.Model):
             self.continue_network = self.outer.continue_network
             self.reward_network = self.outer.reward_network
             self.rssm = self.outer.rssm
-            self.contrastive_network = self.outer.contrastive_network
+            # self.contrastive_network = self.outer.contrastive_network
 
         def __getattr__(self, name):
             return getattr(self.outer, name)
@@ -896,45 +896,45 @@ class TWISTER(models.Model):
             # Model Contrastive Loss
             ###############################################################################
 
-            # Flatten B and L to ensure diff augment for each sample (B*L, 3, H, W)
-            states_flatten = states.flatten(0, 1)
+            # # Flatten B and L to ensure diff augment for each sample (B*L, 3, H, W)
+            # states_flatten = states.flatten(0, 1)
 
-            # Augment
-            states_aug = torch.stack([self.config.contrastive_augments(states_flatten[b]) for b in range(states_flatten.shape[0])], dim=0).reshape(states.shape)
+            # # Augment
+            # states_aug = torch.stack([self.config.contrastive_augments(states_flatten[b]) for b in range(states_flatten.shape[0])], dim=0).reshape(states.shape)
 
-            # Forward
-            posts_con = self.encoder_network(states_aug)
+            # # Forward
+            # posts_con = self.encoder_network(states_aug)
 
-            # Contrastive steps loop
-            for t in range(self.config.contrastive_steps):
+            # # Contrastive steps loop
+            # for t in range(self.config.contrastive_steps):
 
-                # Action condition (B, L-t, A*t)
-                if t > 0:
-                    actions_cond = torch.cat([actions[:, 1+t_:min(actions.shape[1], actions.shape[1]+1+t_-t)] for t_ in range(t)], dim=-1)
+            #     # Action condition (B, L-t, A*t)
+            #     if t > 0:
+            #         actions_cond = torch.cat([actions[:, 1+t_:min(actions.shape[1], actions.shape[1]+1+t_-t)] for t_ in range(t)], dim=-1)
 
-                # Contrastive features (B, L-t, D)
-                features_feats, features_embed = self.contrastive_network[t](
-                    feats=self.rssm.get_feat(priors) if t==0 else torch.cat([self.rssm.get_feat(priors)[:, :-t], actions_cond], dim=-1), 
-                    embed=posts_con["stoch"].flatten(-2, -1) if t==0 else posts_con["stoch"].flatten(-2, -1)[:, t:]
-                )
+            #     # Contrastive features (B, L-t, D)
+            #     features_feats, features_embed = self.contrastive_network[t](
+            #         feats=self.rssm.get_feat(priors) if t==0 else torch.cat([self.rssm.get_feat(priors)[:, :-t], actions_cond], dim=-1), 
+            #         embed=posts_con["stoch"].flatten(-2, -1) if t==0 else posts_con["stoch"].flatten(-2, -1)[:, t:]
+            #     )
                     
-                # Compute contrastive loss
-                if features_feats.dtype != torch.float32:
-                    with torch.cuda.amp.autocast(enabled=False):
-                        info_nce_loss, acc_con = self.compute_contrastive_loss(features_feats.type(torch.float32), features_embed.type(torch.float32))
-                        info_nce_loss = info_nce_loss.type(features_feats.dtype)
-                else:
-                    info_nce_loss, acc_con = self.compute_contrastive_loss(features_feats, features_embed)
+            #     # Compute contrastive loss
+            #     if features_feats.dtype != torch.float32:
+            #         with torch.cuda.amp.autocast(enabled=False):
+            #             info_nce_loss, acc_con = self.compute_contrastive_loss(features_feats.type(torch.float32), features_embed.type(torch.float32))
+            #             info_nce_loss = info_nce_loss.type(features_feats.dtype)
+            #     else:
+            #         info_nce_loss, acc_con = self.compute_contrastive_loss(features_feats, features_embed)
 
-                # Add Loss
-                self.add_loss(
-                    name="model_contrastive_{}".format(t), 
-                    loss=- info_nce_loss.mean(), 
-                    weight=self.config.loss_contrastive_scale * (self.config.contrastive_exp_lambda ** t) * ( (1.0 / sum([self.config.contrastive_exp_lambda ** t_ for t_ in range(self.config.contrastive_steps)])))
-                )
+            #     # Add Loss
+            #     self.add_loss(
+            #         name="model_contrastive_{}".format(t), 
+            #         loss=- info_nce_loss.mean(), 
+            #         weight=self.config.loss_contrastive_scale * (self.config.contrastive_exp_lambda ** t) * ( (1.0 / sum([self.config.contrastive_exp_lambda ** t_ for t_ in range(self.config.contrastive_steps)])))
+            #     )
 
-                # Add Accuracy                    
-                self.add_metric("acc_con" if t==0 else "acc_con_{}".format(t), acc_con)
+            #     # Add Accuracy                    
+            #     self.add_metric("acc_con" if t==0 else "acc_con_{}".format(t), acc_con)
 
             ###############################################################################
             # Model Reconstruction Loss
